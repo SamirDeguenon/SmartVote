@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Vote Électronique 2025</title>
+  <meta name="theme-color" content="#1e3c72">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1e3c72;
+      --secondary: #2a5298;
+      --success: #28a745;
+      --text: #ffffff;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 12px;
+      overflow-x: hidden;
+    }
+    .container {
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(15px);
+      border-radius: 20px;
+      padding: 32px 24px;
+      width: 96%;
+      max-width: 1100px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      animation: fadeIn 1.2s ease-out;
+    }
+    h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 8px; text-shadow: 0 0 20px rgba(255,255,255,0.3); }
+    .subtitle { font-size: 1.1rem; opacity: 0.95; margin-bottom: 24px; }
+    .candidates { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-top: 20px; }
+    .card {
+      background: rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 24px 16px;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      opacity: 0.55;
+      transform: translateY(30px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 320px;
+    }
+    .card.active {
+      opacity: 1;
+      transform: translateY(0);
+      background: rgba(255,255,255,0.18);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .card.active:hover { transform: translateY(-12px) scale(1.05); }
+    .logo {
+      width: 120px; height: 120px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 6px solid rgba(255,255,255,0.25);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      margin-bottom: 16px;
+    }
+    .no-image {
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff8;
+      font-size: 0.9rem;
+      border: 4px dashed rgba(255,255,255,0.2);
+    }
+    .name { font-weight: 800; font-size: 1.35rem; margin: 12px 0; min-height: 56px; display: flex; align-items: center; text-align: center; }
+    .btn {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 50px;
+      font-weight: 800;
+      font-size: 1.15rem;
+      cursor: pointer;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: all 0.5s ease;
+      box-shadow: 0 10px 30px rgba(40,167,69,0.4);
+      width: 100%;
+      max-width: 220px;
+      margin-top: auto;
+    }
+    .btn.active { opacity: 1; transform: scale(1); animation: pulse 2s infinite; }
+    .tooltip {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      color: white;
+      padding: 14px 28px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 1.10rem;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+      z-index: 9999;
+      animation: slideUp 0.6s ease-out;
+      backdrop-filter: blur(10px);
+    }
+    @keyframes fadeIn { from {opacity:0; transform:translateY(20px)} to {opacity:1; transform:translateY(0)} }
+    @keyframes slideUp { from {transform: translate(-50%, 100px); opacity:0} to {transform: translateX(-50%); opacity:1} }
+    @keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(40,167,69,0.7)} 70% {box-shadow: 0 0 0 20px rgba(40,167,69,0)} 100% {box-shadow: 0 0 0 0 rgba(40,167,69,0)} }
+    @media (max-width: 480px) {
+      h1 { font-size: 1.8rem; }
+      .logo, .no-image { width: 100px; height: 100px; }
+      .card { min-height: 280px; }
+      .btn { padding: 12px 20px; font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 id="title">Smart Vote 2025</h1>
+    <p class="subtitle" id="subtitle">Élection en cours…</p>
+    <div class="candidates" id="candidates"></div>
+  </div>
+  <div id="tooltip" class="tooltip">Scannez votre carte de vote</div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAGvGH0_EdWKkg1IpA0F0LDhDfvN69_0Ok",
+      authDomain: "smart-vote-edeee.firebaseapp.com",
+      databaseURL: "https://smart-vote-edeee-default-rtdb.firebaseio.com",
+      projectId: "smart-vote-edeee",
+      storageBucket: "smart-vote-edeee.firebasestorage.app",
+      messagingSenderId: "826001279152",
+      appId: "1:826001279152:web:e230015e902d8147a6d375"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const titleEl = document.getElementById('title');
+    const subtitleEl = document.getElementById('subtitle');
+    const candidatesDiv = document.getElementById('candidates');
+    const tooltip = document.getElementById('tooltip');
+    let currentUid = null;
+    let messages = { scan: "Scannez votre carte de vote" };
+
+    // Messages personnalisés
+    db.ref('messages').on('value', snap => {
+      messages = { ...messages, ...snap.val() };
+      tooltip.textContent = messages.scan || "Scannez votre carte de vote";
+    });
+
+    // Titre & sous-titre
+    db.ref('election').on('value', snap => {
+      const e = snap.val() || {};
+      titleEl.textContent = e.title || "Smart Vote 2025";
+      subtitleEl.textContent = e.subtitle || "Élection en cours…";
+    });
+
+    // Affichage des candidats
+    db.ref('candidates').orderByChild('order').on('value', snap => {
+      candidatesDiv.innerHTML = '';
+      const candidates = snap.val() || {};
+      const keys = Object.keys(candidates).sort((a,b) => (candidates[a].order || 99) - (candidates[b].order || 99));
+
+      keys.forEach(key => {
+        const c = candidates[key];
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const logo = document.createElement('img');
+        logo.className = 'logo';
+        logo.alt = c.name || 'Candidat';
+        logo.onerror = () => { logo.style.display = 'none'; card.insertAdjacentHTML('afterbegin', '<div class="no-image">LOGO</div>'); };
+        logo.src = c.logo && c.logo.startsWith('http') ? c.logo : 'https://via.placeholder.com/120/1e293b/ffffff?text=LOGO';
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = c.name || 'Candidat';
+
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = 'VOTER';
+        btn.dataset.duo = key;
+
+        card.append(logo, name, btn);
+        candidatesDiv.appendChild(card);
+      });
+      attachVoteButtons();
+    });
+
+    function showTooltip(text, duration = 0) {
+      tooltip.textContent = text;
+      tooltip.style.display = 'block';
+      if (duration > 0) {
+        clearTimeout(tooltip.timeout);
+        tooltip.timeout = setTimeout(() => tooltip.style.display = 'none', duration);
+      }
+    }
+
+    function activateAllCards() {
+      document.querySelectorAll('.card').forEach(c => c.classList.add('active'));
+      document.querySelectorAll('.btn').forEach(b => b.classList.add('active'));
+    }
+    function deactivateAllCards() {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    }
+
+    function attachVoteButtons() {
+      document.querySelectorAll('.btn').forEach(btn => {
+        btn.onclick = async () => {
+          if (!currentUid) return;
+          const duo = btn.dataset.duo;
+          try {
+            await db.ref(`votes/${duo}`).transaction(v => (v || 0) + 1);
+            await db.ref(`cards/${currentUid}/used`).set(true);
+            await db.ref('scan').set(null); // ← Nettoie le scan pour éviter le re-vote
+
+            confetti({ particleCount: 300, spread: 100, origin: { y: 0.6 } });
+            showTooltip(messages.thanks || "Merci pour votre vote !", 5000);
+            deactivateAllCards();
+            currentUid = null;
+            setTimeout(() => showTooltip(messages.scan || "Scannez votre carte de vote"), 5500);
+          } catch (e) {
+            console.error(e);
+            showTooltip("Erreur réseau. Réessayez.", 4000);
+          }
+        };
+      });
+    }
+
+    // ÉCOUTE DU SCAN – VERSION CORRIGÉE ET ULTRA-STABLE
+    db.ref('scan/timestamp').on('value', async () => {
+      const uidSnap = await db.ref('scan/uid').once('value');
+      const uid = uidSnap.val();
+      if (!uid) return;
+
+      const cardSnap = await db.ref(`cards/${uid}`).once('value');
+      const card = cardSnap.val();
+
+      // Carte inconnue
+      if (!card) {
+        showTooltip(messages.ineligible || "Vous n’êtes pas éligible", 5000);
+        await db.ref('scan').set(null);
+        return;
+      }
+
+      // Carte déjà utilisée
+      if (card.used === true) {
+        showTooltip(messages.alreadyUsed || "Cette carte a déjà voté", 5000);
+        await db.ref('scan').set(null);
+        return;
+      }
+
+      // Tout est bon → vote autorisé
+      currentUid = uid;
+      activateAllCards();
+      showTooltip(messages.choose || "Choisissez votre duo", 0);
+    });
+
+    // État initial
+    deactivateAllCards();
+  </script>
+</body>
+</html>
