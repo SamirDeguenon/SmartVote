@@ -1,1 +1,1 @@
-# Smart-Vote
+# SmartVote
